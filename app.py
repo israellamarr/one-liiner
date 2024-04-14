@@ -43,7 +43,11 @@ def convert_string_time(hour_string):
 
 
 def weekly_hours(end_day, end_hour, start_day, start_hour, time_frames):
-    days_of_week = ['Mon', 'Tues', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    if start_day == 'Tues':
+        start_day = 'Tue'
+    if end_day == 'Tues':
+        end_day = 'Tue'
+    days_of_week = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     start_day_index = days_of_week.index(start_day)
     end_day_index = days_of_week.index(end_day)
     days_list = days_of_week[start_day_index:end_day_index + 1]
@@ -71,11 +75,14 @@ with open('public-data/restaurants.csv', newline='') as csvfile:
 def is_open(rest_hours, target_datetime):
     day_of_week = target_datetime.strftime('%a')
     now_time = target_datetime.time()
-    start_time, end_time = rest_hours[day_of_week]
+    start_time, end_time = rest_hours[day_of_week] if rest_hours.get(day_of_week) else (None, None)
+    if not start_time or not end_time:
+        return False
+
     return start_time <= now_time <= end_time
 
 
-@app.route('/restaurants', methods=['GET'])
+@app.route('/', methods=['GET'])
 def get_open_restaurants():
     datetime_str = request.args.get('datetime')
     if not datetime_str:
@@ -84,7 +91,10 @@ def get_open_restaurants():
     try:
         target_datetime = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M')
     except ValueError:
-        return jsonify({'error': 'Invalid datetime format. Use MM-DD HH:MM'}), 400
+        return jsonify({'error': 'Invalid datetime format. Use YYYY-MM-DD HH:MM'}), 400
+
+    if target_datetime.strftime('%Y-%m-%d') < datetime.now().strftime('%Y-%m-%d'):
+        return jsonify({'error': 'Date must be today or in the future'}), 400
 
     open_restaurants = []
     for restaurant, restHours in restaurant_data.items():
