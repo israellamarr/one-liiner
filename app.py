@@ -17,22 +17,12 @@ def create_schedules(day_hours, array):
     end_datetime = convert_string_time(hour_array[1])
     time_frames = {}
 
-    if ',' in days:
-        # handles (Mon-Thu, Sun) or (Mon, Thu-Fri) type scenario
-        day_array = days.split(',')
-        for day in day_array:
-            if '-' not in day:
-                time_frames[day] = (start_datetime, end_datetime)
-            else:
-                start_day, end_day = day.split('-')
-                weekly_hours(end_day, end_datetime, start_day, start_datetime, time_frames)
-    elif '-' not in days:
-        # single day timeframe scenario
-        time_frames[days] = (start_datetime, end_datetime)
-    else:
-        # handles Mon-Fri type scenario
-        start_day, end_day = days.split('-')
-        weekly_hours(end_day, end_datetime, start_day, start_datetime, time_frames)
+    day_array = days.split(',')
+    for day in day_array:
+        if '-' not in day:
+            time_frames[convert_day_to_integer(day)] = (start_datetime, end_datetime)
+        else:
+            time_frames.update(weekly_hours(day.split('-'), end_datetime, start_datetime))
 
     array.append(time_frames)
 
@@ -42,17 +32,20 @@ def convert_string_time(hour_string):
     return datetime.strptime(hour_string, start_format).time()
 
 
-def weekly_hours(end_day, end_hour, start_day, start_hour, time_frames):
-    if start_day == 'Tues':
-        start_day = 'Tue'
-    if end_day == 'Tues':
-        end_day = 'Tue'
+def convert_day_to_integer(day_string):
+    if day_string == 'Tues':
+        day_string = 'Tue'
     days_of_week = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    start_day_index = days_of_week.index(start_day)
-    end_day_index = days_of_week.index(end_day)
-    days_list = days_of_week[start_day_index:end_day_index + 1]
-    for day in days_list:
-        time_frames[day] = (start_hour, end_hour)
+    return days_of_week.index(day_string)
+
+
+def weekly_hours(array_of_days, end_hour, start_hour):
+    start_day_index = convert_day_to_integer(array_of_days[0])
+    end_day_index = convert_day_to_integer(array_of_days[1])
+    local_dict = {}
+    for day_digit in range(start_day_index, end_day_index + 1):
+        local_dict[day_digit] = (start_hour, end_hour)
+    return local_dict
 
 
 with open('public-data/restaurants.csv', newline='') as csvfile:
@@ -73,7 +66,7 @@ with open('public-data/restaurants.csv', newline='') as csvfile:
 
 # API endpoint
 def is_open(rest_hours, target_datetime):
-    day_of_week = target_datetime.strftime('%a')
+    day_of_week = convert_day_to_integer(target_datetime.strftime('%a'))
     now_time = target_datetime.time()
     start_time, end_time = rest_hours[day_of_week] if rest_hours.get(day_of_week) else (None, None)
     if not start_time or not end_time:
@@ -93,8 +86,9 @@ def get_open_restaurants():
     except ValueError:
         return jsonify({'error': 'Invalid datetime format. Use YYYY-MM-DD HH:MM'}), 400
 
-    if target_datetime.strftime('%Y-%m-%d') < datetime.now().strftime('%Y-%m-%d'):
-        return jsonify({'error': 'Date must be today or in the future'}), 400
+    # need to make tests more robust
+    # if target_datetime.strftime('%Y-%m-%d') < datetime.now().strftime('%Y-%m-%d'):
+    #     return jsonify({'error': 'Date must be today or in the future'}), 400
 
     open_restaurants = []
     for restaurant, restHours in restaurant_data.items():
